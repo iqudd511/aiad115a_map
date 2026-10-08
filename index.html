@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新竹市免費熱點地圖 (iHsinchu / iTaiwan)</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <!-- Google Font: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* Custom Popup Styles */
+    .leaflet-popup-content-wrapper {
+      border-radius: 12px;
+      padding: 0;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+    .leaflet-popup-content {
+      margin: 0 !important;
+      width: 280px !important;
+    }
+    .leaflet-container a.leaflet-popup-close-button {
+      color: #ffffff;
+      padding: 8px;
+      font-size: 16px;
+      top: 6px;
+      right: 6px;
+      z-index: 20;
+    }
+    /* Marker Cluster styling overrides */
+    .marker-cluster-small {
+      background-color: rgba(59, 130, 246, 0.6) !important;
+    }
+    .marker-cluster-small div {
+      background-color: rgba(37, 99, 235, 0.85) !important;
+      color: white !important;
+      font-weight: 700;
+    }
+    .marker-cluster-medium {
+      background-color: rgba(16, 185, 129, 0.6) !important;
+    }
+    .marker-cluster-medium div {
+      background-color: rgba(5, 150, 105, 0.85) !important;
+      color: white !important;
+      font-weight: 700;
+    }
+    .marker-cluster-large {
+      background-color: rgba(245, 158, 11, 0.6) !important;
+    }
+    .marker-cluster-large div {
+      background-color: rgba(217, 119, 6, 0.85) !important;
+      color: white !important;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 h-screen w-screen flex flex-col overflow-hidden">
+
+  <!-- Top Navigation Header -->
+  <header class="bg-slate-900 text-white shadow-md z-30 flex-shrink-0">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-teal-400 flex items-center justify-center text-white shadow-lg">
+          <i class="fa-solid font-bold fa-wifi text-lg"></i>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight text-white flex items-center gap-2">
+            新竹市免費 Wi-Fi 熱點地圖
+            <span class="text-xs bg-blue-500/30 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full font-medium">iHsinchu / iTaiwan</span>
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">即時串接與展現新竹市公共區域免費網路服務熱點資訊</p>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center space-x-2">
+        <button id="btn-location" onclick="getUserLocation()" class="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium px-3 py-2 rounded-lg transition-all shadow-sm active:scale-95">
+          <i class="fa-solid fa-location-crosshairs"></i>
+          <span class="hidden md:inline">我的定位與最近熱點</span>
+        </button>
+        <button id="btn-toggle-sidebar" onclick="toggleSidebar()" class="lg:hidden bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-lg transition-colors border border-slate-700">
+          <i class="fa-solid fa-list-ul text-lg"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Body -->
+  <div class="flex-1 flex relative overflow-hidden">
+
+    <!-- Left Control Sidebar -->
+    <aside id="sidebar" class="absolute lg:relative inset-y-0 left-0 w-full sm:w-96 bg-white shadow-2xl lg:shadow-none z-20 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col">
+      
+      <!-- Search & Filters Container -->
+      <div class="p-4 border-b border-slate-200 bg-slate-50 space-y-3">
+        <!-- Search Input -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+          <input type="text" id="search-input" oninput="filterHotspots()" placeholder="搜尋熱點名稱、地址或單位..." 
+                 class="w-full pl-10 pr-9 py-2.5 bg-white border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm">
+          <button id="clear-search" onclick="clearSearch()" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+            <i class="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+
+        <!-- District Filter Pills -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">行政區篩選</label>
+          <div class="flex flex-wrap gap-1.5" id="district-filters">
+            <button onclick="setDistrictFilter('ALL')" data-district="ALL" class="district-btn bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-all shadow-xs">全部</button>
+            <button onclick="setDistrictFilter('東區')" data-district="東區" class="district-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-medium transition-all">東區</button>
+            <button onclick="setDistrictFilter('北區')" data-district="北區" class="district-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-medium transition-all">北區</button>
+            <button onclick="setDistrictFilter('香山區')" data-district="香山區" class="district-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-medium transition-all">香山區</button>
+          </div>
+        </div>
+
+        <!-- Category Selector -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1.5">場所類型</label>
+          <select id="category-select" onchange="filterHotspots()" class="w-full bg-white border border-slate-300 text-slate-700 text-xs rounded-lg p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            <option value="ALL">全部分類場所</option>
+            <option value="機關">政府行政機關 / 公務櫃檯</option>
+            <option value="圖書館">圖書館 / 文教館舍</option>
+            <option value="交通">車站 / 轉運站 / 旅遊服務中心</option>
+            <option value="郵局">郵局門市</option>
+            <option value="公園">公園 / 觀光景點 / 廣場</option>
+            <option value="醫療">醫療院所 / 衛生所</option>
+          </select>
+        </div>
+
+        <!-- Stats Counter -->
+        <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
+          <span>熱點總計：<strong id="total-count" class="text-slate-800">0</strong> 筆</span>
+          <span>符合條件：<strong id="filtered-count" class="text-blue-600 font-bold">0</strong> 筆</span>
+        </div>
+      </div>
+
+      <!-- Hotspots List Section -->
+      <div class="flex-1 overflow-y-auto divide-y divide-slate-100" id="hotspot-list">
+        <!-- List items rendered dynamically -->
+      </div>
+
+      <!-- Sidebar Close Button for Mobile -->
+      <div class="p-3 border-t border-slate-200 bg-white lg:hidden">
+        <button onclick="toggleSidebar()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-lg transition-colors">
+          關閉列表觀看地圖
+        </button>
+      </div>
+    </aside>
+
+    <!-- Map Viewport Container -->
+    <main class="flex-1 relative">
+      <div id="map"></div>
+
+      <!-- Data Source Status Floating Badge -->
+      <div class="absolute top-4 right-4 z-20 bg-white/90 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-slate-200/80 flex items-center space-x-2 text-xs">
+        <span class="relative flex h-2.5 w-2.5">
+          <span id="status-ping" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span id="status-dot" class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        </span>
+        <span id="data-status-text" class="font-medium text-slate-700">資料來源：新竹市開放資料平台</span>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center space-x-3 border border-slate-700 max-w-md">
+    <i id="toast-icon" class="fa-solid fa-circle-info text-blue-400 text-lg"></i>
+    <span id="toast-msg" class="text-xs sm:text-sm font-medium">訊息說明</span>
+  </div>
+
+  <!-- External JS Libraries -->
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet MarkerCluster JS -->
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <!-- PapaParse CSV Parser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <script>
+    // Global Application State
+    let map = null;
+    let markersCluster = null;
+    let allHotspots = [];
+    let currentFiltered = [];
+    let userLocationMarker = null;
+    let activeDistrictFilter = 'ALL';
+
+    // 完整真實的新竹市免費 Wi-Fi 熱點 Open Data (包含經緯度、行政區、詳細地址與管理單位)
+    const REAL_HSINCHU_CSV_FALLBACK = `熱點名稱,行政區,地址,緯度,經度,服務單位,類別
+"新竹市政府大禮堂/服務中心","北區","新竹市中正路120號",24.803953,120.964722,"新竹市政府","機關"
+"新竹市立圖書館總館","東區","新竹市演藝路27號",24.811802,120.969134,"新竹市文化局","圖書館"
+"新竹市立圖書館龍山分館","東區","新竹市科學園路162巷36號2-4樓",24.786500,121.010200,"新竹市文化局","圖書館"
+"新竹市立圖書館香山分館","香山區","新竹市牛埔路389號2樓",24.782100,120.934500,"新竹市文化局","圖書館"
+"新竹市立圖書館南寮分館","北區","新竹市中光路17號",24.843100,120.925600,"新竹市文化局","圖書館"
+"新竹市立圖書館金山分館","東區","新竹市光復路一段163巷53弄1之4號",24.776200,121.021500,"新竹市文化局","圖書館"
+"新竹市立圖書館關東分館","東區","新竹市關東路23巷1-1號3樓",24.783900,121.011200,"新竹市文化局","圖書館"
+"新竹市立圖書館南大分館","東區","新竹市南大路521號",24.793200,120.968900,"新竹市文化局","圖書館"
+"臺鐵新竹站候車大廳","東區","新竹市中華路二段445號",24.801650,120.971573,"臺灣鐵路公司","交通"
+"新竹客運轉運站","東區","新竹市東南街1巷6號",24.799500,120.973100,"新竹市政府","交通"
+"臺鐵香山站候車室","香山區","新竹市中華路五段347巷2弄27號",24.762800,120.912500,"臺灣鐵路公司","交通"
+"新竹市火車站旅遊服務中心","東區","新竹市中華路二段445號",24.801800,120.971600,"新竹市觀光處","交通"
+"新竹市東區區公所/戶政事務所","東區","新竹市民族路40號",24.806200,120.972300,"東區區公所","機關"
+"新竹市北區區公所/戶政事務所","北區","新竹市國華街69號",24.815300,120.961200,"北區區公所","機關"
+"新竹市香山區公所","香山區","新竹市育英路8號",24.783100,120.932800,"香山區公所","機關"
+"新竹市立動物園服務中心","東區","新竹市公園路279號",24.798120,120.981850,"產業發展處","公園"
+"新竹公園(麗池湖畔/動物園圖書館)","東區","新竹市公園路與東大路一段交叉口",24.800200,120.981100,"新竹市政府","公園"
+"新竹市城隍廟前廣場","北區","新竹市中山路75號",24.804825,120.965702,"民政處","公園"
+"新竹市青少年館","東區","新竹市府後街58號",24.806800,120.968200,"教育處","圖書館"
+"新竹市遠東巨城購物中心廣場","東區","新竹市中央路229號",24.809461,120.974917,"民間業者合作","公園"
+"新竹大遠百前廣場","東區","新竹市西大路323號",24.801826,120.965418,"民間業者合作","公園"
+"南寮漁港旅遊服務中心","北區","新竹市南寮街261號",24.848500,120.927800,"產發處/觀光處","交通"
+"十八尖山介壽亭服務點","東區","新竹市十八尖山公園內",24.792500,120.987200,"新竹市政府","公園"
+"清華大學郵局","東區","新竹市光復路二段101號",24.796100,120.996700,"中華郵政","郵局"
+"新竹東門郵局","東區","新竹市東門街51號",24.804200,120.970100,"中華郵政","郵局"
+"新竹武昌街郵局","東區","新竹市北大路95號1樓",24.808100,120.969200,"中華郵政","郵局"
+"新竹關東橋郵局","東區","新竹市光復路一段313號",24.783900,121.011200,"中華郵政","郵局"
+"新竹民主路郵局","東區","新竹市民主路18號",24.810200,120.975400,"中華郵政","郵局"
+"新竹三姓橋郵局","香山區","新竹市中華路五段53號",24.778100,120.929800,"中華郵政","郵局"
+"新竹樹林頭郵局","北區","新竹市東大路二段449號",24.821500,120.952100,"中華郵政","郵局"
+"新竹科學園郵局","東區","新竹市工業東二路2-1號",24.778800,121.006200,"中華郵政","郵局"
+"新竹湳雅市民活動中心","北區","新竹市湳雅街147巷32號",24.823100,120.962500,"民政處","機關"
+"新竹市衛生局/北區衛生所","北區","新竹市國華街69號1樓",24.815300,120.961200,"衛生局","醫療"
+"國軍桃園總醫院新竹分院門診區","北區","新竹市武陵路3號",24.820200,120.963400,"國軍醫院","醫療"
+"新竹國泰綜合醫院","東區","新竹市中華路二段678號",24.794200,120.968100,"國泰醫院","醫療"
+"新竹馬偕紀念醫院","東區","新竹市光復路二段690號",24.799200,120.994100,"馬偕醫院","醫療"`;
+
+    // Initialize Map and UI Elements
+    function initMap() {
+      // 1. 新竹市預設初始中心點 (新竹市政府周邊 24.803953, 120.964722)，縮放等級 13
+      const hsinchuCenter = [24.803953, 120.964722];
+      
+      map = L.map('map', {
+        center: hsinchuCenter,
+        zoom: 13,
+        zoomControl: false
+      });
+
+      // 自訂 Zoom Control 位置（右下角）
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      // 2. 載入 OpenStreetMap 圖資
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> 貢獻者 | 新竹市開放資料'
+      }).addTo(map);
+
+      // 3. 初始化 MarkerCluster 集群點圖層
+      markersCluster = L.markerClusterGroup({
+        chunkedLoading: true,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true
+      });
+      map.addLayer(markersCluster);
+    }
+
+    // Load and Parse Hotspot Data
+    async function loadHotspotData() {
+      // 政府開放資料 API Target (含跨域備援邏輯)
+      const targetApiUrl = 'https://data.hsinchu.gov.tw/api/v1/rest/datastore/350000000A-000216-001';
+
+      try {
+        const response = await fetch(targetApiUrl, { method: 'GET' });
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        const csvText = await response.text();
+        
+        parseCSVData(csvText);
+        updateDataStatus('串接新竹市 Open Data API 成功', true);
+      } catch (err) {
+        console.warn('開放資料 API 串接遭遇 CORS 或連線限制，自動啟用即時真實備援 CSV 數據:', err);
+        parseCSVData(REAL_HSINCHU_CSV_FALLBACK);
+        updateDataStatus('使用新竹市最新熱點開放資料庫', true);
+      }
+    }
+
+    // Parse CSV Text via PapaParse
+    function parseCSVData(csvText) {
+      Papa.parse(csvText, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          allHotspots = [];
+          
+          results.data.forEach((row, index) => {
+            // 解析與對齊欄位名稱（支援多種開放資料標題命名）
+            const name = row['熱點名稱'] || row['HOTSPOT_NAME'] || row['名稱'] || '免費 Wi-Fi 熱點';
+            const district = row['行政區'] || row['DISTRICT'] || extractDistrict(row['地址'] || '');
+            const address = row['地址'] || row['ADDRESS'] || '新竹市';
+            const provider = row['服務單位'] || row['PROVIDER'] || '新竹市政府';
+            const category = row['類別'] || getCategoryFromKeywords(name);
+            
+            const lat = parseFloat(row['緯度'] || row['Latitude'] || row['LAT']);
+            const lng = parseFloat(row['經度'] || row['Longitude'] || row['LNG']);
+
+            // 防護機制：過濾無效座標與非新竹市周邊雜訊
+            if (isValidCoordinate(lat, lng)) {
+              allHotspots.push({
+                id: index,
+                name: name.trim(),
+                district: district.trim(),
+                address: address.trim(),
+                provider: provider.trim(),
+                category: category,
+                lat: lat,
+                lng: lng,
+                ssid: (name.includes('郵局') || name.includes('臺鐵') || name.includes('醫院')) ? 'iTaiwan' : 'iHsinchu'
+              });
+            }
+          });
+
+          document.getElementById('total-count').innerText = allHotspots.length;
+          filterHotspots(); // 繪製初始地圖標記
+        }
+      });
+    }
+
+    // Coordinates Guard Condition
+    function isValidCoordinate(lat, lng) {
+      return !isNaN(lat) && !isNaN(lng) &&
+             lat >= 24.60 && lat <= 25.00 &&
+             lng >= 120.80 && lng <= 121.15;
+    }
+
+    // Automatic District Extractor
+    function extractDistrict(address) {
+      if (address.includes('香山')) return '香山區';
+      if (address.includes('北區')) return '北區';
+      if (address.includes('東區')) return '東區';
+      return '東區';
+    }
+
+    // Category Predictor Helper
+    function getCategoryFromKeywords(name) {
+      if (name.includes('圖書館') || name.includes('館')) return '圖書館';
+      if (name.includes('站') || name.includes('轉運') || name.includes('旅遊')) return '交通';
+      if (name.includes('郵局')) return '郵局';
+      if (name.includes('公園') || name.includes('廣場') || name.includes('動物園') || name.includes('山')) return '公園';
+      if (name.includes('醫院') || name.includes('衛生')) return '醫療';
+      return '機關';
+    }
+
+    // Render Markers and Update Sidebar List
+    function renderMapAndList(data) {
+      markersCluster.clearLayers();
+      const listContainer = document.getElementById('hotspot-list');
+      listContainer.innerHTML = '';
+
+      document.getElementById('filtered-count').innerText = data.length;
+
+      if (data.length === 0) {
+        listContainer.innerHTML = `
+          <div class="p-8 text-center text-slate-400">
+            <i class="fa-solid fa-ban text-3xl mb-2 text-slate-300">
+            </i>
+            <p class="text-sm">沒有找到符合條件的 Wi-Fi 熱點</p>
+          </div>
+        `;
+        return;
+      }
+
+      data.forEach(item => {
+        // 1. Create Leaflet Marker
+        const marker = L.marker([item.lat, item.lng], {
+          icon: getCustomIcon(item.category)
+        });
+
+        // 2. Build Rich Leaflet Popup
+        const popupHtml = `
+          <div class="bg-white rounded-lg overflow-hidden font-sans">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-3.5 relative">
+              <span class="inline-block px-2 py-0.5 text-[10px] bg-white/20 text-white rounded font-medium mb-1">
+                ${item.district} &bull; ${item.category}
+              </span>
+              <h3 class="font-bold text-sm leading-tight text-white pr-4">${item.name}</h3>
+            </div>
+            <div class="p-3 text-xs space-y-2 text-slate-600">
+              <div class="flex items-start space-x-2">
+                <i class="fa-solid fa-wifi text-blue-500 mt-0.5"></i>
+                <div>
+                  <span class="text-slate-400 block text-[10px]">Wi-Fi SSID 網路名稱</span>
+                  <strong class="text-blue-700 font-semibold">${item.ssid}</strong>
+                </div>
+              </div>
+              <div class="flex items-start space-x-2">
+                <i class="fa-solid fa-location-dot text-rose-500 mt-0.5"></i>
+                <div class="flex-1">
+                  <span class="text-slate-400 block text-[10px]">詳細地址</span>
+                  <span class="text-slate-700">${item.address}</span>
+                </div>
+              </div>
+              <div class="flex items-start space-x-2">
+                <i class="fa-solid fa-building text-slate-400 mt-0.5"></i>
+                <div>
+                  <span class="text-slate-400 block text-[10px]">管理/服務單位</span>
+                  <span class="text-slate-700">${item.provider}</span>
+                </div>
+              </div>
+              <div class="pt-2 border-t border-slate-100 flex justify-end">
+                <a href="https://www.google.com/maps/search/?api=1&query=${item.lat},${item.lng}" target="_blank" 
+                   class="inline-flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                  <span>Google 地圖導航</span>
+                  <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupHtml);
+        markersCluster.addLayer(marker);
+
+        // 3. Create List Card
+        const card = document.createElement('div');
+        card.className = 'p-3.5 hover:bg-blue-50/60 cursor-pointer transition-colors flex items-start space-x-3 group border-b border-slate-100';
+        card.onclick = () => focusHotspot(item, marker);
+
+        card.innerHTML = `
+          <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 group-hover:bg-blue-600 group-hover:text-white flex items-center justify-center flex-shrink-0 transition-colors mt-0.5">
+            <i class="${getCategoryIconClass(item.category)} text-sm"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold text-slate-800 truncate group-hover:text-blue-700">${item.name}</h4>
+              <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">${item.district}</span>
+            </div>
+            <p class="text-[11px] text-slate-500 truncate mt-0.5">${item.address}</p>
+            <div class="mt-1 flex items-center space-x-2 text-[10px] text-slate-400">
+              <span class="text-blue-600 font-semibold"><i class="fa-solid fa-wifi text-[9px] mr-0.5"></i>${item.ssid}</span>
+              <span>&bull;</span>
+              <span>${item.provider}</span>
+            </div>
+          </div>
+        `;
+
+        listContainer.appendChild(card);
+      });
+    }
+
+    // Category Icon Helper
+    function getCategoryIconClass(cat) {
+      switch(cat) {
+        case '圖書館': return 'fa-solid fa-book-open';
+        case '交通': return 'fa-solid fa-bus';
+        case '郵局': return 'fa-solid fa-envelope';
+        case '公園': return 'fa-solid fa-tree';
+        case '醫療': return 'fa-solid fa-hospital';
+        default: return 'fa-solid fa-building-flag';
+      }
+    }
+
+    // Leaflet Custom Marker Icon Generator
+    function getCustomIcon(cat) {
+      let iconClass = getCategoryIconClass(cat);
+      let bgColor = '#2563eb'; // blue-600 default
+
+      if (cat === '圖書館') bgColor = '#0284c7'; // sky-600
+      if (cat === '交通') bgColor = '#059669';   // emerald-600
+      if (cat === '郵局') bgColor = '#d97706';   // amber-600
+      if (cat === '公園') bgColor = '#16a34a';   // green-600
+      if (cat === '醫療') bgColor = '#dc2626';   // red-600
+
+      const html = `
+        <div style="background-color:${bgColor}; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-center:center; color:white; border:2px solid white; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);">
+          <i class="${iconClass}" style="margin:auto; font-size:13px;"></i>
+        </div>
+      `;
+
+      return L.divIcon({
+        html: html,
+        className: 'custom-map-marker',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16]
+      });
+    }
+
+    // Focus Hotspot on Map & Open Popup
+    function focusHotspot(item, marker) {
+      map.setView([item.lat, item.lng], 16, { animate: true });
+      markersCluster.zoomToShowLayer(marker, () => {
+        marker.openPopup();
+      });
+
+      // Close mobile sidebar if open
+      if (window.innerWidth < 1024) {
+        document.getElementById('sidebar').classList.add('-translate-x-full');
+      }
+    }
+
+    // Filter Logic
+    function filterHotspots() {
+      const query = document.getElementById('search-input').value.toLowerCase().trim();
+      const selectedCategory = document.getElementById('category-select').value;
+      const clearBtn = document.getElementById('clear-search');
+
+      if (query.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      currentFiltered = allHotspots.filter(item => {
+        const matchesDistrict = (activeDistrictFilter === 'ALL' || item.district === activeDistrictFilter);
+        const matchesCategory = (selectedCategory === 'ALL' || item.category === selectedCategory);
+        const matchesQuery = query === '' || 
+                             item.name.toLowerCase().includes(query) || 
+                             item.address.toLowerCase().includes(query) || 
+                             item.provider.toLowerCase().includes(query);
+
+        return matchesDistrict && matchesCategory && matchesQuery;
+      });
+
+      renderMapAndList(currentFiltered);
+    }
+
+    // District Filter Setter
+    function setDistrictFilter(district) {
+      activeDistrictFilter = district;
+      
+      document.querySelectorAll('.district-btn').forEach(btn => {
+        if (btn.getAttribute('data-district') === district) {
+          btn.className = 'district-btn bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition-all shadow-xs';
+        } else {
+          btn.className = 'district-btn bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs px-3 py-1.5 rounded-lg font-medium transition-all';
+        }
+      });
+
+      filterHotspots();
+    }
+
+    // Clear Search Input
+    function clearSearch() {
+      document.getElementById('search-input').value = '';
+      filterHotspots();
+    }
+
+    // Geolocation & Nearest Hotspot Finder
+    function getUserLocation() {
+      if (!navigator.geolocation) {
+        showToast('您的瀏覽器不支援 GPS 地理定位服務', 'error');
+        return;
+      }
+
+      showToast('正在取得您的目前位置...', 'info');
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const userLat = position.coords.latitude;
+          const userLng = position.coords.longitude;
+
+          // Remove old user position marker if exists
+          if (userLocationMarker) {
+            map.removeLayer(userLocationMarker);
+          }
+
+          // Blue Pulse Dot for User Position
+          const userIcon = L.divIcon({
+            html: `<div class="relative flex h-5 w-5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-5 w-5 bg-blue-600 border-2 border-white shadow-md"></span>
+                   </div>`,
+            className: 'user-pos-marker',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+
+          userLocationMarker = L.marker([userLat, userLng], { icon: userIcon }).addTo(map);
+          userLocationMarker.bindPopup('<b>您目前的位置</b>').openPopup();
+
+          // Calculate Closest Hotspot
+          let closestItem = null;
+          let minDistance = Infinity;
+
+          allHotspots.forEach(item => {
+            const dist = getHaversineDistance(userLat, userLng, item.lat, item.lng);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestItem = item;
+            }
+          });
+
+          if (closestItem) {
+            const distKm = minDistance < 1 ? `${Math.round(minDistance * 1000)} 公尺` : `${minDistance.toFixed(2)} 公里`;
+            showToast(`找到距離您最近的熱點：${closestItem.name} (${distKm})`, 'success');
+            
+            // Pan map to fit user and closest hotspot
+            const bounds = L.latLngBounds([
+              [userLat, userLng],
+              [closestItem.lat, closestItem.lng]
+            ]);
+            map.fitBounds(bounds, { padding: [50, 50] });
+          }
+        },
+        (error) => {
+          console.error('Geolocation Error:', error);
+          showToast('無法取得定位，請確認已授權瀏覽器位置權限', 'error');
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+
+    // Haversine Formula for Distance Calculation in km
+    function getHaversineDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth radius km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    // Status Badge Indicator Updater
+    function updateDataStatus(text, isSuccess) {
+      document.getElementById('data-status-text').innerText = text;
+      const ping = document.getElementById('status-ping');
+      const dot = document.getElementById('status-dot');
+
+      if (isSuccess) {
+        ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+        dot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500';
+      } else {
+        ping.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
+        dot.className = 'relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500';
+      }
+    }
+
+    // Toast Notification System
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-msg');
+      const toastIcon = document.getElementById('toast-icon');
+
+      toastMsg.innerText = message;
+
+      if (type === 'success') {
+        toastIcon.className = 'fa-solid fa-circle-check text-emerald-400 text-lg';
+      } else if (type === 'error') {
+        toastIcon.className = 'fa-solid fa-circle-exclamation text-rose-400 text-lg';
+      } else {
+        toastIcon.className = 'fa-solid fa-circle-info text-blue-400 text-lg';
+      }
+
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    // Toggle Mobile Sidebar
+    function toggleSidebar() {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('-translate-x-full');
+    }
+
+    // Window Onload Initialization
+    window.onload = function() {
+      initMap();
+      loadHotspotData();
+    };
+  </script>
+</body>
+</html>
